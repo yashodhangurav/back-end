@@ -28,7 +28,7 @@ let getRandomUser = () => {
     ];   
   }
 
-  //Home route
+  //Home route.
   app.get("/", (req, res) => {
     let q = `SELECT COUNT(*) AS total FROM user`;  // ✅ added alias 'total'
         connection.query(q, (err, result) => {
