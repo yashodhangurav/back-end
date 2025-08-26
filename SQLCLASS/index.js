@@ -56,7 +56,7 @@ let getRandomUser = () => {
  });
 
 
- //Edit route
+ //Edit route.
  app.get("/user/:id/edit", (req,res)=>{
     let {id} = req.params; //we are exstracting id from "req.params" to findout the user info to get us older username and all thing
     let q = `SELECT * FROM user WHERE id='${id}'` /* .This query is used to fetch the information of a specific user based on their `id` for the edit route in the application. */
