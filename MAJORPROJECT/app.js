@@ -7,7 +7,8 @@ const methodOverride = require("method-override")
 const ejsMate = require('ejs-mate');
 const wrapAsync = require("./utils/wrapAsync.js");
 const ExpressError = require("./utils/ExpressError.js");
-const { listingSchema } = require("./schema.js");
+const { listingSchema , reviewSchema } = require("./schema.js"); //importing joi schema from schema.js
+const Review = require("./models/review.js");
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views") );
@@ -35,15 +36,25 @@ app.get("/" , (req,res)=>{
 
 //validation for joi Schema middleware
 const validateListing = (req,res,next)=>{  
-    let {error} = listingSchema.validate(req.body); //validating req.body with listingSchema
-    if(error){ //if there is an error in validation then we are throwing error
-        let errMsg = error.details.map((el)=> el.message.join).join(",") //mapping through the error details and joining them with comma
-        throw new ExpressError(400, error)
+    let {error} = listingSchema.validate(req.body); //here we are validating the req.body with the listingSchema and getting error object if there is any error
+    if(error){              //if there is an error in validation then we are throwing error
+        let errMsg = error.details.map((el)=> el.message).join(",") //mapping through the error details and joining them with comma
+        throw new ExpressError(400, errMsg);
     } else{
-        next();
+        next(); //if there is no error then we are calling next() to proceed to the next middleware or route handler
     }
-}
+};
 
+//validation for joi Schema middleware
+const validateReview = (req,res,next)=>{  
+    let {error} = reviewSchema.validate(req.body);                      //here we are validating the req.body with the listingSchema and getting error object if there is any error
+    if(error){                                                        //if there is an error in validation then we are throwing error
+        let errMsg = error.details.map((el)=> el.message).join(",")         //mapping through the error details and joining them with comma
+        throw new ExpressError(400, errMsg);
+    } else{
+        next();                                                             //if there is no error then we are calling next() to proceed to the next middleware or route handler
+    }
+};
 //index route
 app.get("/listings", wrapAsync( async (req,res)=>{
     const allListings = await Listing.find();
@@ -58,7 +69,7 @@ app.get("/listings/new", (req,res)=>{
 //show route
 app.get("/listings/:id", wrapAsync(async (req,res)=>{
     let {id} = req.params;
-    const listing = await Listing.findById(id);
+    const listing = await Listing.findById(id).populate("reviews"); //populate is used to get the reviews from the review collection by using the reference in listing model
     res.render("./listings/show.ejs", {listing})
 }));
 
@@ -67,7 +78,8 @@ app.post("/listings",
     validateListing, //validating the req.body with joi schema
     wrapAsync(async(req, res) => {
     const newListing = new Listing(req.body.listing);
-     await newListing.save()  
+     await newListing.save() ;
+     res.redirect("/listings");
 }));
 
 
@@ -91,10 +103,24 @@ app.put("/listings/:id",
 app.delete("/listings/:id", wrapAsync(async (req,res)=>{
     let {id} = req.params;
     let deletedListing = await Listing.findByIdAndDelete(id);
-    console.log(deletedListing);
+    // console.log(deletedListing);
     res.redirect("/listings");
 }));
 
+//reviews
+//post route
+app.post("/listings/:id/reviews" , validateReview, wrapAsync(async (req,res)=> {                                   //when we store reviews in db then it will be asynchpronous operation so we are using async here
+    let listing = await Listing.findById(req.params.id);                                    //finding the listing by id
+    let newReview = new Review(req.body.review);                                        //creating new 'review object' from the req.body
+
+    listing.reviews.push(newReview);                                                         //pushing the new review to the listing's review array which is defined in listing model
+    await newReview.save();                                                                   //saving the new review to the db
+    await listing.save();                                                                     //saving the updated listing to the db
+    
+    res.redirect(`/listings/${listing._id}`);                                               //redirecting to the show page of that listing
+}));
+
+// -----------------------------------------------------ERROR handling-----------------
 // handle 404 err if no other route matches
 app.all(/.*/, (req, res, next) => {
     next(new ExpressError(404, "Page Not Found"));
@@ -102,8 +128,8 @@ app.all(/.*/, (req, res, next) => {
 
 // error handling middleware
 app.use((err,req,res,next)=>{
-    let {statusCode=500,message="something went wrong!"} = err;
-    res.status(statusCode).render("error.ejs", {statusCode, message});
+    let {statusCode=500,message="something went wrong!"} = err; //here we are giving default value to statusCode and message and giving the values from "err" object if it exists.
+    res.status(statusCode).render("error.ejs", {message});
 })
 
 app.listen(3000, ()=>{
